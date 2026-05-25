@@ -70,6 +70,19 @@ export function useAlerts() {
     await loadAlerts();
   }, [loadAlerts]);
 
+  const clearActive = useCallback(async () => {
+    await AlertStorage.clearActive();
+    await loadAlerts();
+  }, [loadAlerts]);
+
+  const editAlert = useCallback(
+    async (id: string, targetPrice: number, condition: AlertCondition) => {
+      await AlertStorage.editAlert(id, targetPrice, condition);
+      await loadAlerts();
+    },
+    [loadAlerts]
+  );
+
   const activeAlerts = alerts.filter((a) => a.status === 'ACTIVE');
   const triggeredAlerts = alerts.filter((a) => a.status === 'TRIGGERED');
 
@@ -80,6 +93,8 @@ export function useAlerts() {
     isLoading,
     addAlert,
     deleteAlert,
+    editAlert,
+    clearActive,
     clearTriggered,
     refetch: loadAlerts,
   };

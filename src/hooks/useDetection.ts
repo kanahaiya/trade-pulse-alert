@@ -58,8 +58,19 @@ function detectInPage(): DetectionResult {
   else if (host.includes('upstox.com')) broker = 'Upstox';
   else if (host.includes('angelone.in')) broker = 'Angel One';
 
-  // Symbol extraction
-  const symbolSelectors = [
+  // Symbol extraction - broker-specific first, then generic
+  const isSensibull = host.includes('sensibull.com');
+  
+  // Sensibull-specific symbol selectors
+  const sensibullSymbolSelectors = [
+    '.symbol-name',
+    '[class*="underlying"]',
+    '[class*="spot-symbol"]',
+    '.instrument-name',
+  ];
+  
+  // TradingView / generic symbol selectors
+  const tvSymbolSelectors = [
     '[data-name="legend"] [class*="title"]',
     '[class*="pane-legend-title"]',
     '[class*="chart-symbol-header"]',
@@ -67,22 +78,28 @@ function detectInPage(): DetectionResult {
     '[class*="apply-overflow-tooltip"]',
   ];
   
+  const symbolSelectors = isSensibull 
+    ? [...sensibullSymbolSelectors, ...tvSymbolSelectors]
+    : tvSymbolSelectors;
+  
   const symbolPatterns = [
     /\b(BANKNIFTY\s*\d{2}[A-Z]{3}\d{2}\s*\d+\s*(?:CE|PE))\b/i,
     /\b(NIFTY\s*\d{2}[A-Z]{3}\d{2}\s*\d+\s*(?:CE|PE))\b/i,
     /\b(BANKNIFTY)\b/i,
     /\b(NIFTY\s*50)\b/i,
     /\b(NIFTY)\b/i,
+    /\b(SENSEX)\b/i,
+    /\b(FINNIFTY)\b/i,
     /\b([A-Z]{2,10})\b/,
   ];
   
-  const invalidSymbols = new Set(['THE', 'AND', 'FOR', 'NOT', 'NSE', 'BSE', 'MCX', 'INR', 'USD']);
+  const invalidSymbols = new Set(['THE', 'AND', 'FOR', 'NOT', 'NSE', 'BSE', 'MCX', 'INR', 'USD', 'SPOT', 'INDEX', 'CHART']);
   
   let symbol: string | null = null;
   for (const sel of symbolSelectors) {
     const el = document.querySelector(sel);
     if (el?.textContent) {
-      const text = el.textContent.toUpperCase();
+      const text = el.textContent.toUpperCase().trim();
       for (const pattern of symbolPatterns) {
         const match = text.match(pattern);
         if (match && !invalidSymbols.has(match[1])) {
@@ -94,6 +111,7 @@ function detectInPage(): DetectionResult {
     }
   }
   
+  // Fallback: page title
   if (!symbol) {
     const titleMatch = document.title.toUpperCase().match(/^([A-Z0-9]+)/);
     if (titleMatch && !invalidSymbols.has(titleMatch[1]) && titleMatch[1].length >= 2) {
@@ -101,8 +119,20 @@ function detectInPage(): DetectionResult {
     }
   }
 
-  // Price extraction
-  const priceSelectors = [
+  // Price extraction - broker-specific first, then generic
+  // Sensibull-specific price selectors
+  const sensibullPriceSelectors = [
+    '[class*="spot-price"]',
+    '[class*="underlying-price"]',
+    '[class*="ltp"]',
+    '[class*="last-price"]',
+    '[class*="current-price"]',
+    '.spot-value',
+    '.ltp-value',
+  ];
+  
+  // TradingView / generic price selectors
+  const tvPriceSelectors = [
     '[data-name="legend"]',
     '[class*="pane-legend-line"]',
     '[class*="legend-series-item"]',
@@ -110,15 +140,24 @@ function detectInPage(): DetectionResult {
     '[class*="last-price"]',
   ];
   
+  const priceSelectors = isSensibull 
+    ? [...sensibullPriceSelectors, ...tvPriceSelectors]
+    : tvPriceSelectors;
+  
+  // Price regex patterns - order matters (most specific first)
   const priceRegexes = [
-    /\bC\s+([\d,]+\.\d+)/,
-    /\bLTP[:\s]*([\d,]+\.\d+)/i,
-    /\bLast[:\s]+([\d,]+\.\d+)/i,
-    /\bClose[:\s]+([\d,]+\.\d+)/i,
+    /\bC\s+([\d,]+\.\d+)/,                           // TradingView: C 23,974.15
+    /\bLTP[:\s]*([\d,]+(?:\.\d+)?)/i,                // LTP: 23974.15 or LTP 23974
+    /\bLast[:\s]+([\d,]+(?:\.\d+)?)/i,               // Last: 23974.15
+    /\bClose[:\s]+([\d,]+(?:\.\d+)?)/i,              // Close: 23974.15
+    /\bSpot[:\s]*([\d,]+(?:\.\d+)?)/i,               // Spot: 23974.15 (Sensibull)
+    /₹\s*([\d,]+(?:\.\d+)?)/,                        // ₹ 23,974.15
+    /([\d,]+(?:\.\d+)?)\s*₹/,                        // 23,974.15 ₹
   ];
   
   let price: number | null = null;
   
+  // Strategy 1: Try specific selectors
   for (const sel of priceSelectors) {
     const el = document.querySelector(sel);
     if (el?.textContent) {
@@ -136,6 +175,35 @@ function detectInPage(): DetectionResult {
     }
   }
   
+  // Strategy 2: For Sensibull, scan ALL text for price
+  if (!price && isSensibull) {
+    // Get all text from the page - use innerText for visible text
+    const allText = document.body?.innerText || document.body?.textContent || '';
+    
+    // Multiple patterns to catch different formats
+    // Pattern 1: "23,982.75" (with comma)
+    // Pattern 2: "23982.75" (without comma)
+    const patterns = [
+      /(\d{2},\d{3}\.\d{2})/g,   // 23,982.75
+      /(\d{5}\.\d{2})/g,         // 23982.75
+    ];
+    
+    for (const pattern of patterns) {
+      let match;
+      while ((match = pattern.exec(allText)) !== null) {
+        const priceStr = match[1].replace(/,/g, '');
+        const p = parseFloat(priceStr);
+        // NIFTY: 15000-30000, BANKNIFTY: 40000-60000
+        if (p >= 15000 && p <= 65000) {
+          price = p;
+          break;
+        }
+      }
+      if (price) break;
+    }
+  }
+  
+  // Strategy 3: Full body text scan (last resort)
   if (!price) {
     const bodyText = document.body?.innerText ?? '';
     for (const regex of priceRegexes) {

@@ -55,4 +55,19 @@ export const AlertStorage = {
       [STORAGE_KEYS.ALERTS]: all.filter((a) => a.status === 'ACTIVE'),
     });
   },
+
+  async clearActive(): Promise<void> {
+    const all = await this.getAll();
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.ALERTS]: all.filter((a) => a.status === 'TRIGGERED'),
+    });
+  },
+
+  async editAlert(id: string, targetPrice: number, condition: 'CROSS_ABOVE' | 'CROSS_BELOW'): Promise<void> {
+    const all = await this.getAll();
+    const updated = all.map((a) =>
+      a.id === id ? { ...a, targetPrice, condition, previousPrice: null } : a
+    );
+    await chrome.storage.local.set({ [STORAGE_KEYS.ALERTS]: updated });
+  },
 };

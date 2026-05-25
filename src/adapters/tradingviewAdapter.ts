@@ -166,7 +166,16 @@ function parsePrice(text: string): number | null {
 }
 
 export function extractLivePrice(): number | null {
-  // Strategy 1: Specific TV legend elements
+  // Strategy 1: Page title (most reliable - "NIFTY 23,976.70 +257.40 (+1.09%)")
+  const titleMatch = document.title.match(/(\d[\d,]*\.\d{2})/);
+  if (titleMatch) {
+    const price = parseFloat(titleMatch[1].replace(/,/g, ''));
+    if (price >= 100 && price <= 100000 && !isNaN(price)) {
+      return price;
+    }
+  }
+
+  // Strategy 2: Specific TV legend elements
   for (const sel of PRICE_SELECTORS) {
     const el = document.querySelector(sel);
     if (el?.textContent) {
@@ -175,7 +184,7 @@ export function extractLivePrice(): number | null {
     }
   }
 
-  // Strategy 2: Full body text (most reliable for TV layout)
+  // Strategy 3: Full body text
   const bodyText = document.body?.innerText ?? '';
   return parsePrice(bodyText);
 }

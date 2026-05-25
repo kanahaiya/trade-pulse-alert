@@ -13,6 +13,8 @@ export default function App() {
     triggeredAlerts,
     addAlert,
     deleteAlert,
+    editAlert,
+    clearActive,
     clearTriggered,
   } = useAlerts();
 
@@ -72,6 +74,8 @@ export default function App() {
           activeAlerts={activeAlerts}
           triggeredAlerts={triggeredAlerts}
           onDelete={deleteAlert}
+          onEdit={editAlert}
+          onClearActive={clearActive}
           onClearTriggered={clearTriggered}
         />
       </div>

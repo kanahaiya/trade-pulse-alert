@@ -7,7 +7,22 @@ interface PriceData {
 
 // Function to extract price from page - injected via chrome.scripting
 function extractPriceFromPage(): PriceData {
-  const priceSelectors = [
+  const host = window.location.hostname;
+  const isSensibull = host.includes('sensibull.com');
+  
+  // Sensibull-specific price selectors
+  const sensibullPriceSelectors = [
+    '[class*="spot-price"]',
+    '[class*="underlying-price"]',
+    '[class*="ltp"]',
+    '[class*="last-price"]',
+    '[class*="current-price"]',
+    '.spot-value',
+    '.ltp-value',
+  ];
+  
+  // TradingView / generic price selectors
+  const tvPriceSelectors = [
     '[data-name="legend"]',
     '[class*="pane-legend-line"]',
     '[class*="legend-series-item"]',
@@ -15,15 +30,23 @@ function extractPriceFromPage(): PriceData {
     '[class*="last-price"]',
   ];
   
+  const priceSelectors = isSensibull 
+    ? [...sensibullPriceSelectors, ...tvPriceSelectors]
+    : tvPriceSelectors;
+  
   const priceRegexes = [
-    /\bC\s+([\d,]+\.\d+)/,
-    /\bLTP[:\s]*([\d,]+\.\d+)/i,
-    /\bLast[:\s]+([\d,]+\.\d+)/i,
-    /\bClose[:\s]+([\d,]+\.\d+)/i,
+    /\bC\s+([\d,]+\.\d+)/,                           // TradingView: C 23,974.15
+    /\bLTP[:\s]*([\d,]+(?:\.\d+)?)/i,                // LTP: 23974.15
+    /\bLast[:\s]+([\d,]+(?:\.\d+)?)/i,               // Last: 23974.15
+    /\bClose[:\s]+([\d,]+(?:\.\d+)?)/i,              // Close: 23974.15
+    /\bSpot[:\s]*([\d,]+(?:\.\d+)?)/i,               // Spot: 23974.15 (Sensibull)
+    /₹\s*([\d,]+(?:\.\d+)?)/,                        // ₹ 23,974.15
+    /([\d,]+(?:\.\d+)?)\s*₹/,                        // 23,974.15 ₹
   ];
   
   let price: number | null = null;
   
+  // Strategy 1: Try specific selectors
   for (const sel of priceSelectors) {
     const el = document.querySelector(sel);
     if (el?.textContent) {
@@ -41,6 +64,32 @@ function extractPriceFromPage(): PriceData {
     }
   }
   
+  // Strategy 2: For Sensibull, scan ALL text for price
+  if (!price && isSensibull) {
+    const allText = document.body?.innerText || document.body?.textContent || '';
+    
+    // Multiple patterns to catch different formats
+    const patterns = [
+      /(\d{2},\d{3}\.\d{2})/g,   // 23,982.75
+      /(\d{5}\.\d{2})/g,         // 23982.75
+    ];
+    
+    for (const pattern of patterns) {
+      let match;
+      while ((match = pattern.exec(allText)) !== null) {
+        const priceStr = match[1].replace(/,/g, '');
+        const p = parseFloat(priceStr);
+        // NIFTY: 15000-30000, BANKNIFTY: 40000-60000
+        if (p >= 15000 && p <= 65000) {
+          price = p;
+          break;
+        }
+      }
+      if (price) break;
+    }
+  }
+  
+  // Strategy 3: Full body text scan
   if (!price) {
     const bodyText = document.body?.innerText ?? '';
     for (const regex of priceRegexes) {
@@ -56,13 +105,23 @@ function extractPriceFromPage(): PriceData {
   }
 
   // Symbol extraction
-  const symbolSelectors = [
+  const sensibullSymbolSelectors = [
+    '.symbol-name',
+    '[class*="underlying"]',
+    '[class*="spot-symbol"]',
+  ];
+  
+  const tvSymbolSelectors = [
     '[data-name="legend"] [class*="title"]',
     '[class*="pane-legend-title"]',
     '[class*="apply-overflow-tooltip"]',
   ];
   
-  const invalidSymbols = new Set(['THE', 'AND', 'FOR', 'NOT', 'NSE', 'BSE', 'MCX', 'INR', 'USD']);
+  const symbolSelectors = isSensibull 
+    ? [...sensibullSymbolSelectors, ...tvSymbolSelectors]
+    : tvSymbolSelectors;
+  
+  const invalidSymbols = new Set(['THE', 'AND', 'FOR', 'NOT', 'NSE', 'BSE', 'MCX', 'INR', 'USD', 'SPOT', 'INDEX']);
   let symbol: string | null = null;
   
   for (const sel of symbolSelectors) {

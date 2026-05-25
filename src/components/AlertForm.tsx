@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { AlertCondition } from '../types/alert.types';
 
 interface AlertFormProps {
@@ -10,113 +10,88 @@ interface AlertFormProps {
 
 export function AlertForm({ symbol, currentPrice, onSubmit, disabled }: AlertFormProps) {
   const [targetPrice, setTargetPrice] = useState('');
-  const [condition, setCondition] = useState<AlertCondition>('CROSS_ABOVE');
-  const [warning, setWarning] = useState<string | null>(null);
+  const [hasUserEdited, setHasUserEdited] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Set current price as default when it first becomes available
+  useEffect(() => {
+    if (currentPrice !== null && !hasUserEdited && targetPrice === '') {
+      setTargetPrice(currentPrice.toString());
+    }
+  }, [currentPrice, hasUserEdited, targetPrice]);
+
+  const handleSetAlert = (condition: AlertCondition) => {
     const price = parseFloat(targetPrice);
     if (isNaN(price) || price <= 0) return;
 
     onSubmit(price, condition);
-    setTargetPrice('');
-    setWarning(null);
+    setTargetPrice(currentPrice?.toString() || '');
+    setHasUserEdited(false);
   };
 
-  const handleTargetChange = (value: string) => {
+  const handlePriceChange = (value: string) => {
     setTargetPrice(value);
-    const price = parseFloat(value);
-
-    if (!isNaN(price) && currentPrice !== null) {
-      if (condition === 'CROSS_ABOVE' && price <= currentPrice) {
-        setWarning('Target is at or below current price');
-      } else if (condition === 'CROSS_BELOW' && price >= currentPrice) {
-        setWarning('Target is at or above current price');
-      } else {
-        setWarning(null);
-      }
-    } else {
-      setWarning(null);
-    }
-  };
-
-  const handleConditionChange = (newCondition: AlertCondition) => {
-    setCondition(newCondition);
-    const price = parseFloat(targetPrice);
-
-    if (!isNaN(price) && currentPrice !== null) {
-      if (newCondition === 'CROSS_ABOVE' && price <= currentPrice) {
-        setWarning('Target is at or below current price');
-      } else if (newCondition === 'CROSS_BELOW' && price >= currentPrice) {
-        setWarning('Target is at or above current price');
-      } else {
-        setWarning(null);
-      }
-    }
+    setHasUserEdited(true);
   };
 
   const isValid = targetPrice !== '' && parseFloat(targetPrice) > 0;
+  const price = parseFloat(targetPrice);
+  
+  // Show warning based on price vs current
+  const getWarning = (condition: AlertCondition): string | null => {
+    if (isNaN(price) || currentPrice === null) return null;
+    if (condition === 'CROSS_ABOVE' && price <= currentPrice) {
+      return 'Will trigger immediately (price already above)';
+    }
+    if (condition === 'CROSS_BELOW' && price >= currentPrice) {
+      return 'Will trigger immediately (price already below)';
+    }
+    return null;
+  };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="space-y-3">
       <div>
         <label className="block text-sm font-medium text-white mb-2">
-          Set New Alert for {symbol}
+          Set Alert for {symbol}
         </label>
         <input
           type="number"
           step="0.01"
           min="0"
-          placeholder="Target Price"
+          placeholder="Enter target price"
           value={targetPrice}
-          onChange={(e) => handleTargetChange(e.target.value)}
+          onChange={(e) => handlePriceChange(e.target.value)}
           disabled={disabled}
           className="w-full px-4 py-3 bg-card border border-border rounded-lg text-white placeholder-muted focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent disabled:opacity-50"
         />
-        {warning && (
-          <p className="mt-1 text-xs text-yellow-500">⚠️ {warning}</p>
-        )}
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-white mb-2">
-          Condition
-        </label>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => handleConditionChange('CROSS_ABOVE')}
-            disabled={disabled}
-            className={`flex-1 px-3 py-1.5 rounded-md font-medium text-xs transition-colors ${
-              condition === 'CROSS_ABOVE'
-                ? 'bg-success text-white'
-                : 'bg-card border border-border text-muted hover:text-white'
-            } disabled:opacity-50`}
-          >
-            ↑ Cross Above
-          </button>
-          <button
-            type="button"
-            onClick={() => handleConditionChange('CROSS_BELOW')}
-            disabled={disabled}
-            className={`flex-1 px-3 py-1.5 rounded-md font-medium text-xs transition-colors ${
-              condition === 'CROSS_BELOW'
-                ? 'bg-danger text-white'
-                : 'bg-card border border-border text-muted hover:text-white'
-            } disabled:opacity-50`}
-          >
-            ↓ Cross Below
-          </button>
-        </div>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => handleSetAlert('CROSS_ABOVE')}
+          disabled={disabled || !isValid}
+          className="flex-1 px-3 py-2.5 rounded-lg font-medium text-sm bg-success hover:bg-success/80 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          title={getWarning('CROSS_ABOVE') || 'Alert when price crosses above target'}
+        >
+          ↑ Cross Above
+        </button>
+        <button
+          type="button"
+          onClick={() => handleSetAlert('CROSS_BELOW')}
+          disabled={disabled || !isValid}
+          className="flex-1 px-3 py-2.5 rounded-lg font-medium text-sm bg-danger hover:bg-danger/80 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          title={getWarning('CROSS_BELOW') || 'Alert when price crosses below target'}
+        >
+          ↓ Cross Below
+        </button>
       </div>
-
-      <button
-        type="submit"
-        disabled={disabled || !isValid}
-        className="w-full px-4 py-3 bg-brand hover:bg-brand-dark text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        + Set Alert
-      </button>
-    </form>
+      
+      {isValid && currentPrice !== null && (
+        <p className="text-xs text-muted text-center">
+          Current: ₹{currentPrice.toLocaleString('en-IN')} → Target: ₹{price.toLocaleString('en-IN')}
+        </p>
+      )}
+    </div>
   );
 }
