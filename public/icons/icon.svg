@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#16213e"/>
+    </linearGradient>
+    <linearGradient id="pulseGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00d4ff"/>
+      <stop offset="50%" style="stop-color:#0F62FE"/>
+      <stop offset="100%" style="stop-color:#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="alertGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#fbbf24"/>
+      <stop offset="100%" style="stop-color:#f59e0b"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="url(#bgGrad)" stroke="#0F62FE" stroke-width="3"/>
+  
+  <!-- Pulse line (trading chart) -->
+  <path d="M 18 70 L 35 70 L 42 55 L 52 78 L 62 40 L 72 65 L 82 50 L 92 60 L 110 60" 
+        fill="none" 
+        stroke="url(#pulseGrad)" 
+        stroke-width="4" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"
+        filter="url(#glow)"/>
+  
+  <!-- Alert bell -->
+  <g transform="translate(78, 20)" filter="url(#glow)">
+    <path d="M 12 0 C 12 0 12 2 12 2 C 16 3 19 7 19 12 L 19 18 C 19 18 24 20 24 20 L 0 20 C 0 20 5 18 5 18 L 5 12 C 5 7 8 3 12 2 C 12 2 12 0 12 0 Z" 
+          fill="url(#alertGrad)"/>
+    <circle cx="12" cy="23" r="3" fill="url(#alertGrad)"/>
+  </g>
+  
+  <!-- Up arrow (cross above indicator) -->
+  <g transform="translate(20, 28)">
+    <polygon points="10,0 20,12 14,12 14,22 6,22 6,12 0,12" fill="#24A148"/>
+  </g>
+  
+  <!-- Pulse dot -->
+  <circle cx="62" cy="40" r="5" fill="#00d4ff">
+    <animate attributeName="r" values="4;6;4" dur="1s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="1;0.6;1" dur="1s" repeatCount="indefinite"/>
+  </circle>
+</svg>
